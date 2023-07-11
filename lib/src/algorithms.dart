@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:image/image.dart';
 
 /// Abstract class for all algorithms
@@ -10,7 +12,7 @@ abstract class Algorithm {
   Algorithm();
 
   /// Creates lists of [Pixel] for [src1] and [src2] for sub class compare operations
-  double compare(Image src1, Image src2) {
+  CompareResult compare(Image src1, Image src2) {
     // Pixel representation of [src1] and [src2]
     _pixelListPair = Pair([], []);
 
@@ -29,8 +31,15 @@ abstract class Algorithm {
           .add(Pixel(bytes2[i], bytes2[i + 1], bytes2[i + 2], bytes2[i + 3]));
     }
 
-    return 0.0; // default return
+    return CompareResult(0.0, bytes1); // default return
   }
+}
+
+class CompareResult {
+  final double diffPercent;
+  final Uint8List diffImage;
+
+  const CompareResult(this.diffPercent, this.diffImage);
 }
 
 /// Organizational class for storing [src1] and [src2] data.
@@ -64,7 +73,7 @@ abstract class DirectAlgorithm extends Algorithm {
   /// If different sizes, larger image will be
   /// resized to the smaller image
   @override
-  double compare(Image src1, Image src2) {
+  CompareResult compare(Image src1, Image src2) {
     if (src1.width != src2.width && src1.height != src2.height) {
       var size1 = src1.width * src1.height;
       var size2 = src2.width * src2.height;
@@ -79,7 +88,7 @@ abstract class DirectAlgorithm extends Algorithm {
     // Delegates pixel extraction to parent
     super.compare(src1, src2);
 
-    return 0.0;
+    return CompareResult(0.0, src1.getBytes());
   }
 }
 
@@ -104,7 +113,7 @@ class EuclideanColorDistance extends DirectAlgorithm {
   /// Computes euclidean color distance between two images
   /// of the same size
   @override
-  double compare(Image src1, Image src2) {
+  CompareResult compare(Image src1, Image src2) {
     // Delegates image resizing to parent
     super.compare(src1, src2);
 
@@ -137,7 +146,8 @@ class EuclideanColorDistance extends DirectAlgorithm {
                   2)));
     }
 
-    return sum / (numPixels * sqrt(3 + alphaBit));
+    final double diff = sum / (numPixels * sqrt(3 + alphaBit));
+    return CompareResult(diff, src1.getBytes());
   }
 
   @override
@@ -172,7 +182,7 @@ class PixelMatching extends DirectAlgorithm {
   /// Computes overlap between two images's color intensities.
   /// Return value is the fraction similarity e.g. 0.1 means 10%
   @override
-  double compare(Image src1, Image src2) {
+  CompareResult compare(Image src1, Image src2) {
     // Delegates image resizing to parent
     super.compare(src1, src2);
 
@@ -184,6 +194,7 @@ class PixelMatching extends DirectAlgorithm {
     var delta = tolerance * 256;
 
     var numPixels = _pixelListPair._first.length;
+    Uint8List diffResult = src1.getBytes();
 
     for (var i = 0; i < numPixels; i++) {
       if (_withinRange(delta, _pixelListPair._first[i]._red,
@@ -193,14 +204,20 @@ class PixelMatching extends DirectAlgorithm {
           _withinRange(delta, _pixelListPair._first[i]._green,
               _pixelListPair._second[i]._green)) {
         if (ignoreAlpha ||
-              _withinRange(delta, _pixelListPair._first[i]._alpha,
-                  _pixelListPair._second[i]._alpha)) {
-                    count++;
-                  }
+            _withinRange(delta, _pixelListPair._first[i]._alpha,
+                _pixelListPair._second[i]._alpha)) {
+          count++;
+        }
+      } else {
+        diffResult[i * 4] = 255;
+        diffResult[i * 4 + 1] = 0;
+        diffResult[i * 4 + 2] = 0;
+        diffResult[i * 4 + 3] = 1;
       }
     }
 
-    return 1 - (count / numPixels);
+    final double diff = 1 - (count / numPixels);
+    return CompareResult(diff, src1.getBytes());
   }
 
   bool _withinRange(var delta, var value, var target) {
@@ -247,7 +264,7 @@ class IMED extends DirectAlgorithm {
   /// Computes distance between two images
   /// using image euclidean distance
   @override
-  double compare(Image src1, Image src2) {
+  CompareResult compare(Image src1, Image src2) {
     // Delegates image resizing to parent
     super.compare(src1, src2);
 
@@ -305,7 +322,7 @@ class IMED extends DirectAlgorithm {
       }
     }
 
-    return sum / gaussNorm;
+    return CompareResult(sum / gaussNorm, src1.getBytes());
   }
 
   /// Helper function to return grayscale value of a pixel
@@ -335,11 +352,11 @@ class IMED extends DirectAlgorithm {
 /// Abstract class for all hash alogrithms
 abstract class HashAlgorithm extends Algorithm {
   @override
-  double compare(Image src1, Image src2) {
+  CompareResult compare(Image src1, Image src2) {
     // Delegates pixel extraction to parent
     super.compare(src1, src2);
 
-    return 0.0; //default return
+    return CompareResult(0.0, src1.getBytes()); //default return
   }
 
   /// Helper function used by subclasses to return hamming distance between two hashes
@@ -373,7 +390,7 @@ class PerceptualHash extends HashAlgorithm {
 
   ///Resize and grayscale images
   @override
-  double compare(Image src1, Image src2) {
+  CompareResult compare(Image src1, Image src2) {
     src1 = copyResize(src1, height: 32, width: 32);
     src2 = copyResize(src2, height: 32, width: 32);
 
@@ -382,7 +399,7 @@ class PerceptualHash extends HashAlgorithm {
     var hash1 = calcPhash(_pixelListPair._first);
     var hash2 = calcPhash(_pixelListPair._second);
 
-    return _hammingDistance(hash1, hash2);
+    return CompareResult(_hammingDistance(hash1, hash2), src1.getBytes());
   }
 
   /// Helper function which computes a binary hash of a [List] of [Pixel]
@@ -507,7 +524,7 @@ class PerceptualHash extends HashAlgorithm {
 /// * Returns percentage diffence (0.0 - no difference, 1.0 - 100% difference)
 class AverageHash extends HashAlgorithm {
   @override
-  double compare(Image src1, Image src2) {
+  CompareResult compare(Image src1, Image src2) {
     src1 = copyResize(grayscale(src1), height: 8, width: 8);
     src2 = copyResize(grayscale(src2), height: 8, width: 8);
 
@@ -517,7 +534,7 @@ class AverageHash extends HashAlgorithm {
     var hash2 = calcAvg(_pixelListPair._second);
 
     // Delegates hamming distance computation to parent
-    return _hammingDistance(hash1, hash2);
+    return CompareResult(_hammingDistance(hash1, hash2), src1.getBytes());
   }
 
   /// Helper funciton to compute average hex hash for an image
@@ -557,7 +574,7 @@ class AverageHash extends HashAlgorithm {
 /// * Returns percentage diffence (0.0 - no difference, 1.0 - 100% difference)
 class MedianHash extends HashAlgorithm {
   @override
-  double compare(Image src1, Image src2) {
+  CompareResult compare(Image src1, Image src2) {
     src1 = copyResize(grayscale(src1), height: 9, width: 8);
     src2 = copyResize(grayscale(src2), height: 9, width: 8);
 
@@ -567,7 +584,7 @@ class MedianHash extends HashAlgorithm {
     var hash2 = calcMedian(_pixelListPair._second);
 
     // Delegates hamming distance computation to parent
-    return _hammingDistance(hash1, hash2);
+    return CompareResult(_hammingDistance(hash1, hash2), src1.getBytes());
   }
 
   /// Helper funciton to compute median hex hash for an image
@@ -614,7 +631,7 @@ abstract class HistogramAlgorithm extends Algorithm {
 
   /// Fills color intensity histograms for child class compare operations
   @override
-  double compare(Image src1, Image src2) {
+  CompareResult compare(Image src1, Image src2) {
     // RGBA histograms for [src1] and [src2]
     _histograms = Pair(RGBAHistogram(_binSize), RGBAHistogram(_binSize));
 
@@ -638,7 +655,7 @@ abstract class HistogramAlgorithm extends Algorithm {
       _histograms._second.alphaHist[pixel._alpha] += 1 / src2Size;
     }
 
-    return 0.0; // default return
+    return CompareResult(0.0, src1.getBytes()); // default return
   }
 
   /// Helper function that's overrided by subclasses
@@ -660,7 +677,7 @@ class RGBAHistogram {
     redHist = List.filled(_binSize, 0.0);
     greenHist = List.filled(_binSize, 0.0);
     blueHist = List.filled(_binSize, 0.0);
-    alphaHist = List.filled(_binSize, 0.0); 
+    alphaHist = List.filled(_binSize, 0.0);
   }
 }
 
@@ -684,7 +701,7 @@ class ChiSquareDistanceHistogram extends HistogramAlgorithm {
 
   /// Calculates histogram similarity using chi-squared distance
   @override
-  double compare(Image src1, Image src2) {
+  CompareResult compare(Image src1, Image src2) {
     // Delegates histogram initialization to parent
     super.compare(src1, src2);
 
@@ -694,10 +711,11 @@ class ChiSquareDistanceHistogram extends HistogramAlgorithm {
 
     sum += _diff(_histograms._first.redHist, _histograms._second.redHist) +
         _diff(_histograms._first.greenHist, _histograms._second.greenHist) +
-        _diff(_histograms._first.blueHist, _histograms._second.blueHist) + 
-        (alphaBit * _diff(_histograms._first.alphaHist, _histograms._second.alphaHist));
+        _diff(_histograms._first.blueHist, _histograms._second.blueHist) +
+        (alphaBit *
+            _diff(_histograms._first.alphaHist, _histograms._second.alphaHist));
 
-    return sum / (3 + alphaBit);
+    return CompareResult(sum / (3 + alphaBit), src1.getBytes());
   }
 
   /// Helper function to compute chi square difference
@@ -746,7 +764,7 @@ class IntersectionHistogram extends HistogramAlgorithm {
 
   /// Calculates histogram similarity using standard intersection
   @override
-  double compare(Image src1, Image src2) {
+  CompareResult compare(Image src1, Image src2) {
     // Delegates histogram initialization to parent
     super.compare(src1, src2);
 
@@ -756,10 +774,11 @@ class IntersectionHistogram extends HistogramAlgorithm {
 
     sum += _diff(_histograms._first.redHist, _histograms._second.redHist) +
         _diff(_histograms._first.greenHist, _histograms._second.greenHist) +
-        _diff(_histograms._first.blueHist, _histograms._second.blueHist) + 
-        (alphaBit * _diff(_histograms._first.alphaHist, _histograms._second.alphaHist));
+        _diff(_histograms._first.blueHist, _histograms._second.blueHist) +
+        (alphaBit *
+            _diff(_histograms._first.alphaHist, _histograms._second.alphaHist));
 
-    return 1 - (sum / (3 + alphaBit));
+    return CompareResult(1 - (sum / (3 + alphaBit)), src1.getBytes());
   }
 
   /// Helper function to compute difference between two histograms

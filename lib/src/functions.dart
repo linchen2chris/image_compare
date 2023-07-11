@@ -13,7 +13,7 @@ import 'package:universal_io/io.dart';
 /// * [File] - reference to a file on the file system (dart:io File class)
 /// * [List]- list of integers (bytes representing the image)
 /// * [Image] - image buffer (Image class)
-Future<double> compareImages({
+Future<CompareResult> compareImages({
   required var src1,
   required var src2,
   Algorithm? algorithm,
@@ -22,13 +22,13 @@ Future<double> compareImages({
   src1 = await _getImageFromDynamic(src1);
   src2 = await _getImageFromDynamic(src2);
 
-  var result = algorithm.compare(src1, src2);
+  CompareResult result = algorithm.compare(src1, src2);
 
   // Ignore floating point error
-  if (result < 0) {
-    result = 0;
-  } else if (result > 1) {
-    result = 1;
+  if (result.diffPercent < 0) {
+    return CompareResult(0.0, result.diffImage);
+  } else if (result.diffPercent > 1.0) {
+    return CompareResult(1.0, result.diffImage);
   }
 
   return result;
@@ -47,14 +47,15 @@ Future<double> compareImages({
 /// * [File] - reference to a file on the file system (dart:io File class)
 /// * [List]- list of integers (bytes representing the image)
 /// * [Image] - image buffer (Image class)
-Future<List<double>> listCompare({
+Future<List<CompareResult>> listCompare({
   required var target,
   required List<dynamic> list,
   Algorithm? algorithm,
 }) async {
   algorithm ??= PixelMatching(); //default algorithm
 
-  var results = List<double>.filled(list.length, 0);
+  var results = List<CompareResult>.filled(
+      list.length, CompareResult(0.0, target.getBytes()));
 
   await Future.wait(list.map((otherSrc) async {
     results[list.indexOf(otherSrc)] =
