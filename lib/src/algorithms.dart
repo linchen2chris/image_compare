@@ -209,10 +209,10 @@ class PixelMatching extends DirectAlgorithm {
           count++;
         }
       } else {
-        diffResult[i * 4] = 255;
-        diffResult[i * 4 + 1] = 0;
-        diffResult[i * 4 + 2] = 0;
-        diffResult[i * 4 + 3] = 1;
+        diffResult[i * 4] = 0x01;
+        diffResult[i * 4 + 1] = 0x27;
+        diffResult[i * 4 + 2] = 0x32;
+        diffResult[i * 4 + 3] = 0xff;
       }
     }
 
