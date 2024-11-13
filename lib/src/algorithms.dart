@@ -1,6 +1,6 @@
-import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
+
 import 'package:image/image.dart';
 
 /// Abstract class for all algorithms
@@ -177,7 +177,12 @@ class PixelMatching extends DirectAlgorithm {
   /// (0.05 * 256) of another RGB value.
   var tolerance;
 
-  PixelMatching({bool this.ignoreAlpha = false, this.tolerance = 0.05});
+  List<int> diffColor;
+
+  PixelMatching(
+      {bool this.ignoreAlpha = false,
+      this.tolerance = 0.05,
+      this.diffColor = const [0x01, 0x27, 0x32, 0xff]});
 
   /// Computes overlap between two images's color intensities.
   /// Return value is the fraction similarity e.g. 0.1 means 10%
@@ -209,10 +214,10 @@ class PixelMatching extends DirectAlgorithm {
           count++;
         }
       } else {
-        diffResult[i * 4] = 0x01;
-        diffResult[i * 4 + 1] = 0x27;
-        diffResult[i * 4 + 2] = 0x32;
-        diffResult[i * 4 + 3] = 0xff;
+        diffResult[i * 4] = diffColor[0];
+        diffResult[i * 4 + 1] = diffColor[1];
+        diffResult[i * 4 + 2] = diffColor[2];
+        diffResult[i * 4 + 3] = diffColor[3];
       }
     }
 
